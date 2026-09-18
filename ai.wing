@@ -991,3 +991,78 @@ npm run build   13 routes, clean
 - 6 of 6 gradient words resolving the clip at both 1280px and 320px
 - Phase offsets continuous across both lines
 - 320px — `scrollWidth` 320, **0 overflowing elements**; price still lands on `89`
+
+---
+
+## [1.2.0] — Footer rebuilt to the reference measurements
+
+The footer was originally built from the reference site's DOM structure, but
+only the structure — the type scale, weights, tracking and margins were
+approximated. Pulled the reference's computed styles again and matched every
+one.
+
+### Corrections made
+
+| Property | Was | Now (matches reference) |
+| --- | --- | --- |
+| Container max-width | `max-w-7xl` (1280px) | **1200px** |
+| Container gutter | 16/24/32px responsive | **32px** from `sm` |
+| Top band bottom margin | 56px | **38px** |
+| Section heading weight | 700 | **800** |
+| Section heading tracking | 0.13em | **0.12em** (1.536px at 12.8px) |
+| Section heading colour | white | muted, matching the reference's tonal role |
+| Heading → list spacing | 16px | **6px** |
+| Phone weight | 700 | **800** |
+| Phone bottom margin | — | **8px** |
+| Hours bottom margin | 8px | **6px** |
+| Disclosure border | `white/10` | **`white/12`** |
+| Disclosure item spacing | 14px | **10px** |
+| Disclosure title bottom margin | 16px | **14px** |
+| Legal link weight | 400 | **600** |
+| Line-heights | Tailwind defaults | **1.6** throughout, as measured |
+
+### Verified against the reference, property by property
+
+```
+footer padding       72px 0px 32px      ✓ identical
+container max-width  1200px             ✓ identical
+container padding    0px 32px           ✓ identical
+top grid columns     312.865 / 223.479 / 223.479 / 268.167px   ✓ identical
+top grid gap         36px               ✓ identical
+top grid margin      38px               ✓ identical
+nav heading          12.8px / 800 / ls 1.536px / mb 6px        ✓ identical
+nav link             14.88px / 400 / lh 23.808px               ✓ identical
+nav gap              9px                ✓ identical
+phone                21.6px / 800 / lh 34.56px / mb 8px        ✓ identical
+disclosure title     13.12px / 800 / ls 1.5744px / mb 14px     ✓ identical
+disclosure item      12.16px / 400 / lh 19.456px / mb 10px     ✓ identical
+legal link           14.08px / 600 / lh 22.528px              ✓ identical
+```
+
+The computed grid track widths land on the same sub-pixel values, which is the
+strongest confirmation the container width, gutter, gap and ratios all match.
+
+### Deliberate divergence
+Colours stay on Ting's navy scale rather than the reference's blue-greys
+(`#001226` / `#9fb3c8` / `#c6d6e8`). The request was for that footer's layout and
+typography; adopting another provider's palette would break the brand system
+that the rest of the site is built on. The tonal *roles* are matched — muted
+headings, lighter links, white phone number.
+
+### Added
+A compliance contact line in the bottom band, mirroring the reference's, built
+from `COMPANY` so it fills in with the rest of the placeholders.
+
+### Kept
+The phone-only tap-target padding from 1.0.0 (`py-[11px] sm:py-0`), which sits
+outside the reference's desktop measurements and only applies below `sm`.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   13 routes, clean
+```
+- 320px — `scrollWidth` 320, **0 overflowing elements**; footer collapses to a
+  single 280px column
+- 1 footer link under 40px: the inline phone inside a sentence, exempt under
+  WCAG 2.5.8

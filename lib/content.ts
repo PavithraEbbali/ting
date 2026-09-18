@@ -595,6 +595,10 @@ export const FOOTER_LEGAL_LINKS: { label: string; href: string }[] = [
   { label: 'PCI DSS', href: '/pci-dss' },
 ];
 
+/** Compliance contact line in the footer's bottom band. */
+export const FOOTER_COMPLIANCE_NOTE =
+  `For compliance questions, inquiries or complaints regarding ${COMPANY.legalName}, contact ${COMPANY.legalEmail} or write to ${COMPANY.addressLines.join(', ')}.`;
+
 export const FOOTER_TAGLINE =
   'Independent authorized retailer helping U.S. households order Ting fiber internet and Ting Mobile service.';
 
