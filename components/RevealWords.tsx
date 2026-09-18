@@ -8,24 +8,42 @@ interface RevealWordsProps {
   /** Gap between consecutive words, in ms. */
   stepMs?: number;
   /**
-   * Fills each word with the brand gradient and runs the light through it.
-   *
-   * The gradient is applied per word rather than to the line, deliberately:
-   * `background-clip: text` clips a background to the glyphs in that element's
-   * own paint layer, and a descendant carrying `transform` or `filter` is
-   * rasterised separately, which drops the fill. Keeping clip, transform and
-   * blur on the same element avoids that entirely, and the words end up
-   * catching the light in sync.
+   * Tailwind classes describing the gradient fill. When set, each word is
+   * filled with it and the light is panned through.
    */
-  gradient?: boolean;
+  gradientClass?: string;
+  /**
+   * Phase offset per word for the pan, in ms. Negative values start later words
+   * further into the cycle, so the highlight reads as one wave crossing the
+   * line rather than every word flashing together.
+   */
+  phaseMs?: number;
+  /** Where this line sits in the wave, so a second line continues the first. */
+  phaseStartMs?: number;
   className?: string;
 }
 
+/**
+ * Splits a line into words and staggers their entrance.
+ *
+ * The entrance and the shimmer sit on two nested elements rather than one,
+ * because they need independent timing — the rise cascades 70ms apart while the
+ * light wave wants near-second offsets, and `animation` cannot be declared twice
+ * on one element.
+ *
+ * The gradient lives on the inner element, which carries no transform or filter
+ * of its own. `background-clip: text` clips to the glyphs in an element's own
+ * paint layer, so a *descendant* with a transform would drop the fill; an
+ * *ancestor* with one is fine, because the fill resolves first and the whole
+ * subtree is transformed afterwards.
+ */
 export default function RevealWords({
   text,
   startDelay = 0,
   stepMs = 70,
-  gradient = false,
+  gradientClass,
+  phaseMs = -900,
+  phaseStartMs = 0,
   className,
 }: RevealWordsProps) {
   const words = text.split(" ");
@@ -36,15 +54,24 @@ export default function RevealWords({
         <Fragment key={`${word}-${i}`}>
           <span
             className={cn(
-              "inline-block will-change-[opacity,transform,filter]",
-              gradient
-                ? "animate-word-shimmer bg-[linear-gradient(100deg,#b9d1ff_0%,#ffffff_46%,#cfddff_80%)] bg-[length:210%_auto] bg-clip-text text-transparent"
-                : "animate-word-rise",
+              "animate-word-rise inline-block will-change-[opacity,transform,filter]",
               className,
             )}
             style={{ animationDelay: `${startDelay + i * stepMs}ms` }}
           >
-            {word}
+            {gradientClass ? (
+              <span
+                className={cn(
+                  "animate-gradient-pan inline-block bg-clip-text text-transparent",
+                  gradientClass,
+                )}
+                style={{ animationDelay: `${phaseStartMs + i * phaseMs}ms` }}
+              >
+                {word}
+              </span>
+            ) : (
+              word
+            )}
           </span>
           {/* Real space between words so lines still wrap normally. */}
           {i < words.length - 1 ? " " : null}

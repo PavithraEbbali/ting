@@ -6,6 +6,19 @@ import { CheckIcon } from "./Icons";
 import RevealWords from "./RevealWords";
 import Spotlight from "./Spotlight";
 
+/*
+  Headline gradients. Every stop has to clear 3:1 against the brightest pixel
+  behind the line (a lit window, composited through the scrim), because the
+  gradient pans — so whichever stop lands over that spot changes continuously.
+  Measured: #ffffff 5.44:1 · #cfddff 4.00:1 · #ffc6a6 3.59:1 · #b9d1ff 3.52:1.
+  For reference, the #84aeff this replaced measured 2.45:1 and failed.
+*/
+const HEADLINE_GRADIENT =
+  "bg-[linear-gradient(100deg,#ffffff_0%,#e8f0ff_18%,#cfddff_34%,#ffffff_52%,#e8f0ff_74%,#ffffff_100%)] bg-[length:240%_auto]";
+
+const ACCENT_GRADIENT =
+  "bg-[linear-gradient(100deg,#b9d1ff_0%,#cfddff_14%,#ffffff_34%,#ffc6a6_56%,#cfddff_78%,#b9d1ff_100%)] bg-[length:240%_auto]";
+
 export default function Hero() {
   const lead = getLeadPlan();
   const speed = formatSpeed(lead);
@@ -101,13 +114,21 @@ export default function Hero() {
             */}
             <h1 className="text-[clamp(2.3rem,6.4vw,4rem)] font-extrabold leading-[1.03] tracking-[-0.04em] text-white [filter:drop-shadow(0_2px_18px_rgba(4,6,30,0.75))_drop-shadow(0_0_34px_rgba(50,83,255,0.45))]">
               <span className="block">
-                <RevealWords text={HERO.headline} startDelay={120} />
+                <RevealWords
+                  text={HERO.headline}
+                  startDelay={120}
+                  gradientClass={HEADLINE_GRADIENT}
+                />
               </span>
               <span className="block">
                 <RevealWords
                   text={HERO.headlineAccent}
                   startDelay={120 + HERO.headline.split(" ").length * 70}
-                  gradient
+                  gradientClass={ACCENT_GRADIENT}
+                  /* Picks the wave up where line one left it, so the light
+                     crosses the whole heading instead of restarting. */
+                  phaseMs={-900}
+                  phaseStartMs={-900 * HERO.headline.split(" ").length}
                 />
               </span>
             </h1>

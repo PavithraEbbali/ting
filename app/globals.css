@@ -119,11 +119,6 @@
   --animate-word-rise: word-rise 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-beam: beam 5.5s linear infinite;
   --animate-chip-in: chip-in 0.6s cubic-bezier(0.34, 1.4, 0.64, 1) both;
-  /* Reveal and shimmer on one element — `animation` cannot be declared twice,
-     so the pair is composed here. */
-  --animate-word-shimmer:
-    word-rise 0.95s cubic-bezier(0.16, 1, 0.3, 1) both,
-    gradient-pan 9s ease-in-out infinite;
   /* Marker rule wiping in under the headline, then holding its shimmer. */
   --animate-rule-sweep:
     rule-grow 0.9s cubic-bezier(0.16, 1, 0.3, 1) both,
@@ -446,7 +441,6 @@ body {
   .animate-glow-pulse,
   .animate-sheen,
   .animate-word-rise,
-  .animate-word-shimmer,
   .animate-rule-sweep,
   .animate-halo,
   .animate-beam,

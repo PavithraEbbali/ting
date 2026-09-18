@@ -940,3 +940,54 @@ npm run build   13 routes: /, 8 policy pages, /sitemap.xml, /robots.txt, /_not-f
 - 390px — 0 overflowing elements, 1 exempt tap target, 0 overlapping footer links
 - 320px — 0 overflowing elements (carried forward)
 - Heavily-blurred surface at 390px: 4.95 Mpx → **1.5 Mpx**
+
+---
+
+## [1.1.0] — Headline gradient across both lines
+
+### Both lines are now gradient-filled and animated
+Line one was flat white; only the accent line carried a gradient. Both now do,
+each with its own definition:
+
+- **Line one** — white → `#e8f0ff` → `#cfddff` → white. A cool shimmer that
+  keeps the line reading as the primary statement.
+- **Line two** — `#b9d1ff` → `#cfddff` → white → **`#ffc6a6`** → `#cfddff`.
+  Brings Ting's coral into the headline for the first time, so the type carries
+  both brand colours rather than only the blue.
+
+Every stop clears 3:1 against the brightest pixel behind the line, which is the
+governing constraint because the gradient pans — whichever stop sits over that
+lit window changes continuously. Measured: `#ffffff` 5.44:1 · `#cfddff` 4.00:1 ·
+`#ffc6a6` 3.59:1 · `#b9d1ff` 3.52:1 · `#e8f0ff` well above. The `#84aeff` this
+line originally used measured 2.45:1 and failed.
+
+### The light now crosses the whole heading
+The reveal and the shimmer moved onto two nested elements. They need
+incompatible timing — the rise cascades 70ms apart, the light wave wants
+900ms — and `animation` cannot be declared twice on one element.
+
+Each word's pan is offset by −900ms from the one before, and `phaseStartMs`
+carries the phase from line one into line two. Verified continuous:
+`0 / −0.9 / −1.8 / −2.7 / −3.6 / −4.5s`. Previously the offsets restarted at
+zero on the second line, so the two lines flashed independently.
+
+**Why the gradient is on the inner element specifically:**
+`background-clip: text` clips to the glyphs in an element's own paint layer. A
+*descendant* carrying a transform or filter is rasterised separately and drops
+the fill — that is why an earlier attempt kept clip, transform and blur together
+on one element. An *ancestor* with a transform is fine: the fill resolves first,
+then the subtree is transformed. So the entrance (transform + blur) sits on the
+outer span and the gradient on the inner one. Verified in the DOM: 6 of 6 words
+resolving `background-clip: text` with a transparent fill and a bound
+`gradient-pan`.
+
+Removed the now-dead `--animate-word-shimmer` composed token.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   13 routes, clean
+```
+- 6 of 6 gradient words resolving the clip at both 1280px and 320px
+- Phase offsets continuous across both lines
+- 320px — `scrollWidth` 320, **0 overflowing elements**; price still lands on `89`
