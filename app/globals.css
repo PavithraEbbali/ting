@@ -1,26 +1,459 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ==========================================================================
+   Ting design tokens
+   --------------------------------------------------------------------------
+   Every hex below is lifted from the live CSS custom properties published on
+   ting.com (--primary-*, --secondary-*, --primary-biz-*, --grey-*, --tertiary-*).
+   No invented brand colours.
+
+   Hierarchy matches ting.com: the blue (--primary-60 / #3253ff) is dominant and
+   carries every primary button, link and eyebrow. The coral (--secondary-60 /
+   #ff8c6c) is the secondary highlight, used the way Ting uses it — promo badges
+   and "recommended" flags. Both map through the semantic --color-brand-* and
+   --color-accent-* blocks below, which are the only place that decision lives.
+   ========================================================================== */
+
+@theme {
+  /* Ting primary — blue */
+  --color-tblue-10: #f9faff;
+  --color-tblue-20: #eff5ff;
+  --color-tblue-30: #cfddff;
+  --color-tblue-40: #84aeff;
+  --color-tblue-50: #5b89ff;
+  --color-tblue-60: #3253ff;
+  --color-tblue-70: #243edb;
+  --color-tblue-80: #192db7;
+  --color-tblue-90: #0f1e93;
+
+  /* Ting secondary — coral */
+  --color-coral-10: #fffaf5;
+  --color-coral-20: #fff1ea;
+  --color-coral-30: #ffe5da;
+  --color-coral-40: #ffc6a6;
+  --color-coral-50: #ffb090;
+  --color-coral-60: #ff8c6c;
+  --color-coral-70: #db634e;
+  --color-coral-80: #b73f36;
+  --color-coral-90: #932222;
+
+  /* Ting dark — navy / charcoal */
+  --color-navy-10: #f6f7ff;
+  --color-navy-20: #d9def4;
+  --color-navy-30: #7a82ad;
+  --color-navy-40: #373d64;
+  --color-navy-50: #242a4a;
+  --color-navy-60: #171d3f;
+  --color-navy-70: #0e1333;
+  --color-navy-80: #0b0f2d;
+  --color-navy-90: #04061e;
+
+  /* Ting greys */
+  --color-ink-10: #f7f7f7;
+  --color-ink-20: #ededed;
+  --color-ink-30: #dbdbdb;
+  --color-ink-40: #cdcdcd;
+  --color-ink-50: #bfbfbf;
+  --color-ink-60: #949494;
+  --color-ink-70: #707070;
+  --color-ink-80: #3b3b3b;
+  --color-ink-90: #0e0e0e;
+
+  /* Ting error scale */
+  --color-error-10: #fcf2f2;
+  --color-error-40: #eb5c5c;
+  --color-error-50: #e54949;
+  --color-error-60: #cb2937;
+  --color-error-70: #aa1c35;
+
+  /* Ting tertiary accents */
+  --color-aqua: #36cec9;
+  --color-mint: #b5fec0;
+  --color-papaya: #ffecbb;
+
+  /* ------------------------------------------------------------------ */
+  /* Semantic aliases — the one place the accent hierarchy is decided.  */
+  /* `brand-*` is the dominant colour (buttons, links, eyebrows, icons).*/
+  /* `accent-*` is the secondary highlight (badges, promo flags).       */
+  /* Re-theming the whole site = repointing these two blocks.           */
+  /* ------------------------------------------------------------------ */
+  --color-brand-10: var(--color-tblue-10);
+  --color-brand-20: var(--color-tblue-20);
+  --color-brand-30: var(--color-tblue-30);
+  --color-brand-40: var(--color-tblue-40);
+  --color-brand-50: var(--color-tblue-50);
+  --color-brand-60: var(--color-tblue-60);
+  --color-brand-70: var(--color-tblue-70);
+  --color-brand-80: var(--color-tblue-80);
+  --color-brand-90: var(--color-tblue-90);
+
+  --color-accent-20: var(--color-coral-20);
+  --color-accent-30: var(--color-coral-30);
+  --color-accent-40: var(--color-coral-40);
+  --color-accent-50: var(--color-coral-50);
+  --color-accent-60: var(--color-coral-60);
+  --color-accent-70: var(--color-coral-70);
+  --color-accent-90: var(--color-coral-90);
+
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ------------------------------------------------------------------ */
+  /* Motion. Everything here is slow and continuous — the kind of drift  */
+  /* you notice only if you look for it. Nothing loops fast enough to    */
+  /* pull the eye off the copy.                                          */
+  /* ------------------------------------------------------------------ */
+  --animate-ken-burns: ken-burns 34s ease-in-out infinite alternate;
+  --animate-aurora-a: aurora-a 26s ease-in-out infinite;
+  --animate-aurora-b: aurora-b 32s ease-in-out infinite;
+  --animate-marquee: marquee 42s linear infinite;
+  --animate-line-rise: line-rise 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade-rise: fade-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-aurora-c: aurora-c 29s ease-in-out infinite;
+  --animate-gradient-pan: gradient-pan 9s ease-in-out infinite;
+  --animate-float-soft: float-soft 7.5s ease-in-out infinite;
+  --animate-glow-pulse: glow-pulse 10s ease-in-out infinite;
+  --animate-sheen: sheen 7s ease-in-out infinite;
+  --animate-word-rise: word-rise 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-beam: beam 5.5s linear infinite;
+  --animate-chip-in: chip-in 0.6s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  /* Reveal and shimmer on one element — `animation` cannot be declared twice,
+     so the pair is composed here. */
+  --animate-word-shimmer:
+    word-rise 0.95s cubic-bezier(0.16, 1, 0.3, 1) both,
+    gradient-pan 9s ease-in-out infinite;
+  /* Marker rule wiping in under the headline, then holding its shimmer. */
+  --animate-rule-sweep:
+    rule-grow 0.9s cubic-bezier(0.16, 1, 0.3, 1) both,
+    gradient-pan 9s ease-in-out infinite;
+  --animate-halo: halo 6s ease-in-out infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes rule-grow {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
   }
 }
 
+/* Ring breathing outward from an element, used to draw the eye to the badge. */
+@keyframes halo {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.09);
+  }
+}
+
+/* Words resolve out of a blur as they rise. Reads as type settling into
+   focus rather than a generic fade. */
+@keyframes word-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5em);
+    filter: blur(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+/* Light running around a border ring. */
+@keyframes beam {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Third aurora blob, slower and on its own period again. */
+@keyframes aurora-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.92);
+  }
+  50% {
+    transform: translate3d(4%, 7%, 0) scale(1.18);
+  }
+}
+
+/* Light travelling across a gradient-filled headline. */
+@keyframes gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.07);
+  }
+}
+
+/* Single pass of light across a surface, with a long rest between passes. */
+@keyframes sheen {
+  0% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  55%,
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+
+@keyframes ken-burns {
+  from {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.12) translate3d(-1.4%, -1%, 0);
+  }
+}
+
+/* Two blobs on different periods so the field never visibly repeats. */
+@keyframes aurora-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, -4%, 0) scale(1.18);
+  }
+  66% {
+    transform: translate3d(-4%, 5%, 0) scale(0.92);
+  }
+}
+
+@keyframes aurora-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  40% {
+    transform: translate3d(-7%, 4%, 0) scale(0.9);
+  }
+  75% {
+    transform: translate3d(5%, -5%, 0) scale(1.2);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* Editorial line reveal — each line rises out of its own clipped box. */
+@keyframes line-rise {
+  from {
+    transform: translateY(105%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Phone tuning
+   --------------------------------------------------------------------------
+   Redefining a keyframe inside a media query overrides it for that range.
+   Two things are too expensive on a phone GPU and are cut back here rather
+   than removed: animating `filter: blur()` per word, and the long Ken Burns
+   travel across a full-bleed image.
+   ========================================================================== */
+
+@media (max-width: 639px) {
+  /* Words still rise, but without the per-frame blur pass. */
+  @keyframes word-rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.45em);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Shorter travel means a smaller repainted area each frame. */
+  @keyframes ken-burns {
+    from {
+      transform: scale(1.02);
+    }
+    to {
+      transform: scale(1.07);
+    }
+  }
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+html {
+  /* Lenis drives scrolling; anchors fall back to native smooth without it. */
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: var(--color-ink-90);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Guard against horizontal overflow at every breakpoint down to 320px. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+::selection {
+  background: var(--color-brand-30);
+  color: var(--color-ink-90);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-60);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Anchor targets clear the sticky chrome. */
+[id] {
+  scroll-margin-top: 7.5rem;
+}
+
+/* ==========================================================================
+   One-shot entrance reveals
+   ========================================================================== */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.65s var(--ease-out-soft),
+    transform 0.65s var(--ease-out-soft);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.reveal[data-revealed="true"] {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+/* Never hide content from users without JS or with motion turned down. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* Looping decoration is switched off outright rather than sped up, so it
+     settles on a stable frame instead of flickering at 0.01ms. */
+  .animate-ken-burns,
+  .animate-aurora-a,
+  .animate-aurora-b,
+  .animate-aurora-c,
+  .animate-marquee,
+  .animate-line-rise,
+  .animate-fade-rise,
+  .animate-gradient-pan,
+  .animate-float-soft,
+  .animate-glow-pulse,
+  .animate-sheen,
+  .animate-word-rise,
+  .animate-word-shimmer,
+  .animate-rule-sweep,
+  .animate-halo,
+  .animate-beam,
+  .animate-chip-in {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
 }

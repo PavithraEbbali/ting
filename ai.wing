@@ -1,0 +1,942 @@
+# ai.wing — build changelog & architecture log
+
+Running log of every significant structural change, feature addition and
+architectural decision for the Ting Authorized Retailer landing site.
+Newest entries at the bottom.
+
+---
+
+## [0.1.0] — Initial build
+
+### Stack
+- Next.js 16.3.5 (App Router, Turbopack) · React 19.2.8 · TypeScript 5
+- Tailwind CSS v4 (CSS-first config via `@theme` in `app/globals.css`)
+- `lenis` for smooth scrolling
+- Static frontend only. No API routes, no database, no server actions.
+
+### Files created
+```
+lib/content.ts            Single source of truth (plans, copy, disclosures, selectors)
+lib/cn.ts                 Class-name joiner
+app/globals.css           Ting design tokens + base + reveal animation
+app/layout.tsx            Fonts, metadata, skip link, SmoothScroll, SiteHeader
+app/page.tsx              Section assembly in canonical order
+components/
+  SmoothScroll.tsx        Lenis setup + anchor interception
+  Reveal.tsx              One-shot IntersectionObserver entrance reveal
+  PriceLockup.tsx         Universal <PriceLockup plan={plan} />
+  CallButton.tsx          CallButton + PhoneLink (every tel: link routes through here)
+  Icons.tsx               Inline SVG icon set
+  Wordmark.tsx            Typographic retailer wordmark
+  SiteHeader.tsx          Disclosure bar + sticky header + mobile sheet
+  ZipChecker.tsx          Client-side ZIP validation → call CTA
+  Hero.tsx                Hero with ZIP checker AND call button
+  SectionHeading.tsx      Shared eyebrow/heading/subheading
+  PlanCard.tsx            Plan card
+  ServiceSection.tsx      Generic service-line renderer
+  FinePrintGrid.tsx       Comparison table (lg) / stacked cards (<lg)
+  WhyUs.tsx               Dark pillars section
+  HowItWorks.tsx          Four-step install flow + closing CTA
+  Faq.tsx                 Native <details> accordion + FAQPage JSON-LD
+  Footer.tsx              Four-column footer + disclosures
+.claude/launch.json       Dev server config
+```
+
+### Decision — colour palette
+Pulled the live CSS custom properties off ting.com rather than guessing. Ting's
+published token set:
+
+| Role | Token | Hex |
+| --- | --- | --- |
+| Primary (blue) | `--primary-60` | `#3253ff` |
+| Secondary (coral) | `--secondary-60` | `#ff8c6c` |
+| Business dark | `--primary-biz-90` | `#04061e` |
+| Greys | `--grey-10` … `--grey-90` | `#f7f7f7` … `#0e0e0e` |
+
+**Note for review:** ting.com paints its own primary buttons *blue* (`#3253ff`).
+The brief asked for coral/orange to be dominant, so this build promotes Ting's
+official coral secondary (`#ff8c6c`) to the dominant accent and primary CTA, and
+keeps the blue as the supporting action colour (ZIP submit). Every hex used is a
+real Ting token — nothing invented. The hierarchy is decided in exactly one
+place, the semantic aliases in `app/globals.css`:
+
+```css
+--color-brand:        var(--color-coral-60);
+--color-brand-hover:  var(--color-coral-70);
+--color-action:       var(--color-tblue-60);
+```
+
+Flipping `--color-brand` to `--color-tblue-60` reverts to ting.com's own
+hierarchy without touching a component.
+
+### Decision — contrast
+Coral `#ff8c6c` on white with white text is 2.3:1 and fails WCAG AA. All coral
+CTAs therefore use near-black `#0e0e0e` text (**8.5:1**). Ting blue with white
+text is 5.5:1 and passes as-is.
+
+### Decision — typography
+Ting sets Circular Std, which is licensed. Substituted **Figtree** (Google
+Fonts) — closest open geometric-humanist sans with the same tall x-height and
+tight tracking. Loaded via `next/font/google`, self-hosted, `display: swap`.
+
+### Decision — which service lines exist
+Audited ting.com. Ting sells fiber internet and mobile, and nothing else
+natively:
+
+| Line | Status | Reason |
+| --- | --- | --- |
+| Fiber | **Included** | Ting Home Fiber $89/mo · Ting Business Fiber (custom pricing) |
+| Cable | **Omitted** | Ting is 100% direct fiber. No cable product. |
+| Bundle | **Included** | Home Fiber + Unlimited Mobile $99/mo |
+| TV | **Omitted** | No native TV product. Legacy TV pages are retired. |
+| Mobile | **Included** | Unlimited $25/mo/line · Unlimited Combo $10/mo/line |
+| Phone | **Omitted** | Ting Voice is early-release to existing customers only, with no published pricing. A card for it would be exactly the "call to ask" placeholder the brief forbids. |
+
+Omission is data-driven, not hard-coded: `getActiveServiceLines()` filters
+`SERVICE_ORDER` down to lines that actually have plans, so adding a TV plan to
+`PLANS` makes the TV section appear in the right slot automatically.
+
+### Decision — pricing data (sourced from ting.com)
+- Home Fiber: **$89/mo**, 2,000 Mbps symmetrical, unlimited data, no contract
+- Bundle: **$99/mo** (vs **$114/mo** separately — $15/mo saving)
+- Mobile Unlimited: **$25/mo per line**, $10 off first 3 months
+- Mobile Unlimited Combo: **$10/mo per line**, first 3 months free, requires Ting Internet
+- Whole Home Wi-Fi+ (eero 7): **from $24/mo**; own router $0; standard install included
+
+### Architecture — the cascade
+`lib/content.ts` is the only file carrying a price. Layout files never read the
+raw arrays; they consume derived selectors:
+
+- `getLeadPlan()` → hero price anchor
+- `getActiveServiceLines()` → which sections render, and in what order
+- `getPlansByLine()` → cards inside each section
+- `getFinePrintRows()` → every row of the comparison table
+- `getNavLinks()` → header nav and anchors
+- `getCtaLabel()` → **the CTA text rule lives here, in one place**
+- `formatSpeed()` → all speed strings
+
+Changing `price: 89` to `price: 79` updates the hero lockup, the fiber card, the
+comparison table and the footer legal line in one edit.
+
+### Architecture — CTA rule
+`getCtaLabel(plan)` returns `"Call to order"` when `plan.price` is a number and
+`"Call for pricing"` when it is undefined. Cards cannot drift from the rule
+because they never author the string themselves.
+
+### Architecture — tel: links
+Every `tel:` link renders through `CallButton` or `PhoneLink`, both of which set
+`data-call-cta` unconditionally. Verified: 14 tel links, 0 missing the attribute.
+
+### Animation budget
+Deliberately small: Lenis smooth scroll (`duration: 1.05`), one-shot fade-and-rise
+reveals via IntersectionObserver that unobserve after firing, and CSS hover
+transitions on cards and buttons. No WebGL, no 3D, no scroll-linked animation, no
+assembly diagrams. All of it collapses under `prefers-reduced-motion: reduce`,
+and a `<noscript>` rule forces `.reveal` visible when JS is unavailable.
+
+### Bug fixed during build
+Header call buttons carried `hidden sm:inline-flex`, but `CallButton` bakes
+`inline-flex` into its base class string. Both are non-responsive `display`
+utilities, so Tailwind's stylesheet order decided the winner and `inline-flex`
+won — the "hidden" buttons still occupied layout and pushed the mobile menu
+button off-screen at 320px (`body.scrollWidth` 424 vs viewport 320). Fixed by
+moving responsive display onto wrapper `<span>`s. Re-verified: `scrollWidth` 320,
+0 overflowing elements.
+
+### Verification performed
+- `npm run build` — compiles clean, TypeScript passes, `/` prerendered static
+- 320px viewport — `document.scrollWidth` 320, **0** overflowing elements
+- 14 `tel:` links, **0** missing `data-call-cta`
+- Raw phone numbers as link text appear **only** in header (3) and footer (2)
+- Plan CTAs read: "Call to order" ×4, "Call for pricing" ×1 (Business Fiber)
+- Section order: `top · plans · bundles · mobile · fine-print · why · how-it-works · faq`
+- Zero external outbound links; zero broadband/nutrition label links
+- Text scan clean for: "pricing observed", "current as of", "last reviewed",
+  "county lines", "ordering channel", "network operator", "official site",
+  "contact Ting directly", "call to ask"
+
+### Open items for the site owner
+1. **Phone number is a placeholder.** `PHONE` in `lib/content.ts` is
+   `(888) 555-0100` (reserved fictional range). Replace `display` and `href`.
+2. **Footer legal links** point at `#legal`. Swap for real Terms / Privacy /
+   Accessibility / Do Not Sell pages when they exist.
+3. **Support hours** in `FOOTER_CONTACT` are placeholders.
+4. **ZIP checker** validates format only — there is no serviceability API in a
+   static build. Wiring a real lookup means replacing the body of `handleSubmit`
+   in `components/ZipChecker.tsx`; nothing else needs to change.
+
+---
+
+## [0.1.1] — Post-build verification & fixes
+
+### Fixed — speed column fallback
+Mobile plans have no `speedDown`, so `getFinePrintRows()` fell back to the
+string "Scaled to your needs", which read as nonsense for a wireless plan.
+Added an optional `speedLabel` field to `PlanItem` so the label is authored in
+data rather than guessed by the formatter:
+
+- `business-fiber` → "Symmetrical, scaled to your business"
+- both mobile plans → "Nationwide LTE + 5G"
+
+`formatSpeed()` now returns `plan.speedLabel` when no Mbps figure exists.
+
+### Fixed — unused import
+Removed the unused `PHONE` import from `components/Footer.tsx` (lint warning).
+
+### Verified — the cascade actually cascades
+Temporarily set the lead plan to `price: 79, cents: '49'` and reloaded. Observed
+in a single pass, with no `.tsx` edits:
+
+| Surface | Rendered |
+| --- | --- |
+| Hero price anchor | `$79.49 per month` |
+| Ting Home Fiber card | `$79.49 per month` |
+| Comparison table row | `$79.49/mo` |
+| Any stale "89" anywhere on the page | none |
+
+Cents handling confirmed too: `.49` surfaces in the table while `.00` is
+suppressed. Reverted to `price: 89, cents: '00'`.
+
+### Verified — interaction
+- ZIP checker: entering `27587` and submitting renders the confirmation panel
+  with its "Call to order" CTA. Non-numeric / short input shows the inline error.
+- Mobile menu at 375px: opens, lists Plans · Bundles · Mobile · FAQ + phone,
+  closes on selection and on Escape.
+- FAQ accordion: native `<details>`, works without JS.
+- Sticky header confirmed pinned (`position: sticky`, `rect.top === 0`) while
+  Lenis is driving the scroll — no desync.
+
+### Final gate
+```
+npm run lint    0 errors, 0 warnings
+npm run build   compiled clean, TypeScript passed, / prerendered static
+```
+
+### Docs
+Replaced the default create-next-app README with project documentation covering
+the single-source-of-truth workflow, the service-line omission rule, the design
+tokens and the pre-launch checklist.
+
+---
+
+## [0.2.0] — Blue-dominant palette + hero rebuild
+
+Three changes requested after review of 0.1.x.
+
+### 1. Palette flipped to match ting.com exactly
+
+The client supplied a screenshot of ting.com showing the vivid blue section
+treatment and asked for those exact shades. That resolves the hierarchy question
+flagged in 0.1.0 in favour of ting.com's own usage: **blue is dominant, coral is
+the secondary highlight.**
+
+Rather than repeat the earlier mistake of hard-coding a palette decision across
+fifteen components, the accent hierarchy now lives behind semantic tokens in
+`app/globals.css`:
+
+```css
+--color-brand-*   ->  var(--color-tblue-*)    /* #3253ff family — dominant */
+--color-accent-*  ->  var(--color-coral-*)    /* #ff8c6c family — highlight */
+```
+
+Components reference `brand-*` / `accent-*` and never the raw `tblue-*` /
+`coral-*` scales. Re-theming the entire site is now repointing two blocks.
+
+Applied:
+
+| Surface | Was | Now |
+| --- | --- | --- |
+| Primary CTA buttons | coral, ink text | **blue `#3253ff`, white text** |
+| ZIP "Check" button | blue | ink-90 (neutral, so the blue CTA owns conversion) |
+| Eyebrows / section kickers | coral-70 | brand-70 `#243edb` (light) · brand-40 `#84aeff` (dark) |
+| Feature checkmarks | coral-70 | brand-60 |
+| Promo qualifiers | coral-90 | brand-70 |
+| FAQ open state, step bubbles, pillar icons | coral | brand |
+| Wordmark "ting" | ink-90 | brand-60 — matches ting.com's own blue logotype |
+| "Most popular" badge | coral | **kept coral** — mirrors Ting's own coral "Recommended" flag |
+| Hero eyebrow dot, disclosure dot | coral | **kept coral** |
+| Form error state | coral-80/90 | **Ting's official `--error-*` scale** (`#e54949`, `#aa1c35`) |
+
+Contrast re-checked: blue `#3253ff` with white text is 5.5:1 (AA); brand-70
+`#243edb` on white is 7.5:1; brand-40 `#84aeff` on navy-90 is 9.0:1.
+
+### 2. Hero rebuilt
+
+The previous hero was a split layout with a dark pricing card on the right —
+the client called it generic. Studied the two reference retailers:
+
+- **kineticfiber.us** — one rounded dark panel, price lockup **inline in the copy**
+  with a small label beside it, trust chips in a strip below.
+- **bestfiberinternet.us** — full-bleed dark hero, two-tone headline with the
+  second line in brand colour, ZIP checker in a contained panel, trust chips as
+  a bar across the bottom.
+
+Both put the price *in the copy flow* and neither uses a floating spec card.
+The rebuild takes that structure:
+
+- Full-bleed `navy-90` section with two soft `#3253ff` radial washes and a
+  masked dot field for depth — no illustration, no motion, no 3D.
+- Two-tone H1: white + `brand-40`, driven by new `HERO.headlineAccent` in
+  `lib/content.ts` so the split stays data-authored.
+- **Price rail**: `HERO.priceLabel` + `<PriceLockup size="lg" tone="dark" />` +
+  spec chips derived from the plan (`formatSpeed`, `dataPolicy`, `contractTerm`).
+  The pricing card is gone.
+- One white ZIP card carrying both required hero actions side by side.
+- Trust chips as a bordered strip flush to the hero's bottom edge.
+
+### 3. Removed the stacked CTA block
+
+Removed the standalone "Call to order" button and its
+"Talk to a person, confirm your address and order in one call." paragraph from
+under the ZIP checker, as requested.
+
+**Constraint note:** the original brief states the hero must keep BOTH a ZIP
+checker and a call button, and that the hero call button must not be removed.
+To honour both instructions, the hero retains exactly **one** "Call to order"
+button — relocated into the ZIP card beside the Check action — and the
+explanatory paragraph is gone entirely. If the intent was to drop the hero call
+button altogether, deleting the `action` prop on `<ZipChecker>` in
+`components/Hero.tsx` does it, but that would contradict the brief.
+
+### Also fixed
+- Header showed the phone number twice at ≥1280px (a text `PhoneLink` plus the
+  button, from an `xl:inline-flex` rule). Removed the redundant text link; the
+  header now carries one phone element per breakpoint.
+- `ZipChecker` gained an `action` slot and a card shell; it no longer imports
+  `CallButton` itself.
+
+### Verification after the change
+```
+npm run lint    0 errors, 0 warnings
+npm run build   compiled clean, TypeScript passed, / prerendered static
+```
+- 320px viewport — `scrollWidth` 320, **0** overflowing elements
+- 12 `tel:` links, **0** missing `data-call-cta`
+- Hero contains the ZIP checker **and** exactly one "Call to order" button
+- Plan CTAs: "Call to order" ×4, "Call for pricing" ×1 (Business Fiber)
+- No raw phone numbers as link text outside the header and footer
+- Section order unchanged: `top · plans · bundles · mobile · fine-print · why · how-it-works · faq`
+- Forbidden-phrase scan clean; 0 external links
+
+---
+
+## [0.3.0] — Professional copy pass, hero call button removed, compact ZIP control
+
+### 1. Copy rewritten for a corporate register
+
+The client flagged seven blocks as reading too casual. Rewritten in
+`lib/content.ts` — no `.tsx` edits needed for any of them:
+
+| Section | Before | After |
+| --- | --- | --- |
+| Hero H1 | "Seriously fast fiber internet / and mobile that stays simple." | "Multi-gig fiber internet / and unlimited mobile." |
+| Fiber | "Multi-gig fiber, priced the same every month" | "Dedicated fiber with consistent monthly pricing" |
+| Bundle | "Put internet and mobile on one bill" | "Internet and mobile on a single account" |
+| Mobile | "Unlimited mobile without the fine print" | "Unlimited mobile on nationwide LTE and 5G" |
+| Fine print | "What the monthly number actually covers" | "Plan inclusions and associated costs" |
+| Why Ting | "Fiber that behaves the same on a Tuesday night as a Sunday morning" | "Consistent performance at every hour of the day" |
+| How it works | "Four steps from call to online" | "From order to installation in four steps" |
+
+Subheadings were rewritten alongside each heading. Folksy constructions removed
+throughout: "sold back to you", "the whole street is online", "hold up under
+load" (kept, but reframed), "drag your speed down with it", "stop stuttering on
+the way out", "promotional cliff at month 13", "bundled in by force".
+
+Also swept for tone consistency, since leaving the bodies casual under
+professional headings would have read worse than either:
+- All four `WHY_US.pillars` bodies and titles.
+- All four `HOW_IT_WORKS.steps` bodies and titles (now noun-phrase labels:
+  Address verification · Plan selection · Installation scheduling · Activation).
+
+### 2. Bundle copy no longer hard-codes prices
+
+The bundle subheading quoted "$10 a month instead of $25" as literal text — a
+cascade leak, since those two figures also live in `PLANS`. It now interpolates:
+
+```ts
+const bundledMobileRate   = PLANS.find(p => p.id === 'mobile-unlimited-combo')?.price;
+const standaloneMobileRate = PLANS.find(p => p.id === 'mobile-unlimited')?.price;
+// …used in the bundle subheading template literal
+```
+
+Changing a mobile price now updates the prose as well as the cards and table.
+
+### 3. Hero call button removed
+
+Removed at the client's explicit second request. **This knowingly departs from
+the original brief**, which stated the hero must contain both a ZIP checker and
+a call button and that the call button must not be removed. The instruction was
+given twice, so it is treated as a deliberate override and is recorded here
+rather than silently applied.
+
+Call-to-action coverage after the change:
+- Sticky header carries a call button at every breakpoint (on screen throughout).
+- All five plan cards carry "Call to order" / "Call for pricing".
+- The closing block under How It Works carries "Call to order".
+- Hero: ZIP checker only.
+
+To restore it: pass an `action={<CallButton … />}` prop back into `<ZipChecker>`
+in `components/Hero.tsx` (the component previously supported this slot).
+
+### 4. ZIP control resized
+
+The availability checker was a full-width white card with a large uppercase
+"CHECK AVAILABILITY AT YOUR ADDRESS" header — the client called it oversized.
+Rebuilt as a single compact pill:
+
+- Card shell, padding and heading removed; the visual label is gone and the
+  `<label>` is now `sr-only`, with the placeholder carrying the instruction.
+- Constrained to `max-w-[34rem]` instead of spanning the hero (544px at desktop,
+  down from full width).
+- Input, search icon and Check button sit in one rounded white pill.
+- Helper and result text moved below the pill, styled for the dark hero.
+- Measured at 320px: pill 288px, input 158px, **0 overflowing elements**.
+
+### 5. Hero headline set on two lines
+
+The blue accent was stranding a single word ("and") at the end of line one.
+Both tones are now `block` spans, so the white and blue halves each own a line.
+The accent was also shortened from "and unlimited nationwide mobile." to
+"and unlimited mobile.", which brings the lockup from three rendered lines to
+two (measured: 64px type, 66px line-height, 1 line per span). "Nationwide"
+still appears in the hero subline and the mobile section heading.
+
+### 6. Copyright year removed
+`© Ting Authorized Retailer. All rights reserved.` — the `new Date()` call was
+dropped with it, so nothing on the page renders a year.
+
+### 7. Section framing moved into content.ts (SSOT gap closed)
+
+Three headings were hard-coded in TSX, outside the single source of truth, and
+were also the last casual copy on the page. Moved and rewritten:
+
+| Was hard-coded in | Now |
+| --- | --- |
+| `Faq.tsx` — "Answers before you pick up the phone" | `FAQ_SECTION` — "Frequently asked questions" |
+| `FinePrintGrid.tsx` — "Everything else that can land on the bill" | `FINE_PRINT.addOnsTitle` — "Additional charges that may appear on your bill" |
+| `HowItWorks.tsx` — "Ready to find out what your address can get?" | `HOW_IT_WORKS.cta` — "Find out what is available at your address" |
+
+### 8. US spelling
+"neighbourhood" → corrected in the FAQ and the Why Ting pillars. No British
+spellings remain in `lib/` or `components/`.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   compiled clean, TypeScript passed, / prerendered static
+```
+- 320px — `scrollWidth` 320, **0** overflowing elements
+- 11 `tel:` links, **0** missing `data-call-cta`
+- Hero: **0** call buttons, ZIP checker present
+- Plan CTAs: "Call to order" ×4, "Call for pricing" ×1; closing CTA "Call to order"
+- 0 raw phone numbers as link text outside header/footer
+- No `© <year>` anywhere; forbidden-phrase scan clean
+- Section order unchanged: `top · plans · bundles · mobile · fine-print · why · how-it-works · faq`
+
+---
+
+## [0.4.0] — Photography added
+
+Seven Gemini-generated images delivered by the client, processed and wired in.
+
+### Processing
+| Step | Detail |
+| --- | --- |
+| Watermark | Gemini stamps a sparkle at a fixed offset from the bottom-right (~137→92px from the right, ~149→96px from the bottom, independent of output size). Measured it, then cropped past the cheaper edge per image — bottom for the portrait cards, right for the landscape ones. Verified clean via a corner contact sheet. |
+| Format | PNG → JPG, quality 84–88, mozjpeg. **17.7 MB → 1.25 MB.** Next re-encodes to WebP/AVIF at request time. |
+| Hero resolution | First pass cropped the hero's bottom, leaving it 1408×603. The hero box is ~760 CSS px tall (~1140 device px at DPR 1.5), so the browser upscaled it ~1.9×. Re-cropped from the **right** edge instead to keep the full 768px height, then upscaled to 2000×1221 (lanczos3 + sharpen). Now downscales rather than up. |
+
+### Placement — all driven from `lib/content.ts`
+A new `SiteImage` interface (`src`, `alt`, `width`, `height`, optional
+`position`) carries every image. No component hard-codes a path.
+
+- **Hero** — `HERO.backgroundImage`, full-bleed via `next/image` `fill` with
+  `priority`. Below `lg` a flat 88% scrim; from `lg` a left-to-right ramp
+  (96% → 88% → 55%) so the headline stays on near-solid navy while the house
+  reads on the right.
+- **Why Ting** — `WHY_US.pillars[].image`, 4:5 cards. The four line icons were
+  removed in favour of photographs, matching how ting.com uses imagery on its
+  own homepage. `FiberIcon`, `SymmetryIcon`, `PriceTagIcon`, `UnbundleIcon` and
+  `PILLAR_ICONS` deleted from `Icons.tsx` as dead code.
+- **Bundle** — `SERVICE_META.bundle.image`. `ServiceSection` now renders a
+  two-column editorial block when a single-plan line carries an image, instead
+  of one card stranded in a wide grid. Still generic: set `image` on any
+  single-plan service line and it picks up the same treatment.
+- **How It Works** — `HOW_IT_WORKS.cta.image`, two-column closing block.
+
+`WHY_US` lost its `as const` and gained an explicit `Pillar[]` type — the const
+assertion narrowed each pillar's image to its own literal, so only the one
+carrying `position` type-checked.
+
+### Contrast, measured not assumed
+Sampled the actual hero pixels under the text band in Node, composited the
+scrim over them and computed worst-case ratios. First pass came back **4.26:1**
+— fine for the large headline but a fail for the normal-size subline. Fixed by
+raising the ramp midpoint 82% → 88%, the right end 45% → 55%, and lifting the
+subline from `navy-20` to `navy-10`:
+
+| Text | Worst case | Needs | |
+| --- | --- | --- | --- |
+| Headline (large) | 5.30:1 | 3:1 | PASS |
+| Subline (normal) | 4.97:1 | 4.5:1 | PASS |
+| Trust chips (normal) | 5.30:1 | 4.5:1 | PASS |
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   compiled clean, TypeScript passed, / prerendered static
+```
+- 320px with all 7 images — `scrollWidth` 320, **0** overflowing elements
+- 7 images, 0 broken; 1 decorative (hero, `alt=""`), 6 with descriptive alt
+- Loading strategy: 1 eager + `priority` (hero, the LCP element), 6 lazy
+- 11 `tel:` links, 0 missing `data-call-cta`; hero still has 0 call buttons
+- Plan CTAs unchanged: "Call to order" ×4, "Call for pricing" ×1
+- Forbidden-phrase scan clean; no year stamp; section order unchanged
+
+### Note
+The dev server's browser cache served stale optimized variants throughout
+testing. Confirmed the server itself returns the correct bytes by fetching
+`/_next/image?...&w=1920` with `cache: 'reload'` — 1920×1172, ratio 1.638,
+matching the new crop. A hard refresh clears it locally; production is unaffected.
+
+---
+
+## [0.5.0] — Hero motion, lighter scrim, animated section backgrounds
+
+### 1. The "ghost house" fixed
+
+Two things were draining the photograph: a blue radial glow painted **over** it,
+and a scrim that covered the full width at 82–96%. Both gone.
+
+- The blue glow over the image is removed entirely. Ting blue now appears only
+  in UI (buttons, eyebrows, the headline accent) and in the drifting aurora
+  fields — never as a wash across the photo.
+- The scrim is anchored to the left edge and falls to **fully transparent by
+  86%** of the width: `from-navy-90 from-6% → via-navy-90/90 via-52% →
+  to-transparent to-86%`. The copy sits on near-solid navy; the house keeps its
+  own colour.
+
+Contrast was re-measured against the actual pixels after the change, because a
+lighter scrim is exactly where legibility breaks:
+
+| Text | Worst case | Needs | |
+| --- | --- | --- | --- |
+| Headline (large) | 5.44:1 @ 59% across | 3:1 | PASS |
+| Subline (normal) | 8.31:1 @ 40% | 4.5:1 | PASS |
+| Price label (normal) | 7.68:1 @ 35% | 4.5:1 | PASS |
+
+The spec pills sit past the 86% point where the scrim is gone, so they no longer
+rely on it — they carry their own `bg-navy-90/65` backdrop-blurred pill.
+
+### 2. Hero motion
+
+All of it slow and continuous; nothing loops fast enough to pull the eye off the
+copy. Defined as `--animate-*` tokens in `@theme`.
+
+- **Ken Burns** on the photograph — 34s, scale 1.02 → 1.12 with a slight drift, alternating.
+- **Line reveal** on the headline — each line rises out of its own clipped box,
+  staggered 120ms / 260ms. The editorial treatment, not a generic fade.
+- **Staggered fade-rise** on eyebrow, subline, price rail, ZIP control and badge
+  (460ms → 900ms).
+- **Trust marquee** replacing the static chip row — 42s linear, duplicate set for
+  a seamless loop (the duplicate is `aria-hidden`), pauses on hover. This mirrors
+  the scrolling trust bar on bestfiberinternet.us.
+- **Circular badge** floating over the photograph on `xl` and up, carrying
+  `HERO.badge` from content.ts. This is the kineticfiber.us device — a real
+  element overlapping the image rather than another rectangle in a column.
+
+### 3. Animated gradient fields on the other sections
+
+New `components/Aurora.tsx`: two heavily blurred blobs in Ting blue and coral on
+different periods (26s / 32s) so the loop never reads as one. Added to the fiber,
+mobile, fine-print, Why Ting, How It Works and FAQ sections. Opacity is 12% on
+light sections and 22–30% on dark — it sits under body copy, so it stays well
+clear of the contrast budget. The wrapper clips its own overflow, so the
+oversized blobs can never widen the page.
+
+### 4. Bundle section uses its photograph as the background
+
+`ServiceSectionMeta` gained `imageTreatment?: 'beside' | 'background'`. The
+bundle line is set to `'background'`: the image fills the section behind an 86%
+scrim plus a vertical grade, the heading flips to the dark tone and the plan card
+sits on top. Still data-driven — any single-plan line can take either treatment.
+The image's alt was blanked since it is now decorative.
+
+### 5. Copy and labels
+- `Check` → **`Check availability`** (short form retained below `sm`, where the
+  full label would not fit the pill).
+- Fiber heading → "Fiber-to-the-home internet at a fixed monthly rate"
+- Bundle heading → "Internet and mobile consolidated on one account"
+
+### 6. Bugs found and fixed
+- **Badge transform conflict.** The circular badge used `-translate-y-1/2` for
+  centring while `fade-rise` settles on `transform: none`, which cancelled it and
+  dropped the badge half its height. Split: outer element owns the centring, inner
+  owns the animation.
+- **Hash links did not work on load.** Opening `/#bundles` directly stayed at the
+  top — native hash handling runs before Lenis attaches and is then overridden by
+  its RAF loop. `SmoothScroll` now re-issues the jump once Lenis owns the scroll
+  position. Verified: `/#why` lands with the section 120px from the top, correctly
+  clearing the sticky chrome.
+- Reduced-motion now switches the looping decoration **off** (`animation: none`)
+  rather than compressing it to 0.01ms, which would have left it flickering.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   compiled clean, TypeScript passed, / prerendered static
+```
+- 320px — `scrollWidth` 320, **0 genuinely overflowing elements** (the marquee
+  track and Ken Burns image extend past the viewport by design and are clipped by
+  their `overflow-hidden` parents; the check now excludes clipped descendants)
+- 7 images, 0 broken · 11 `tel:` links, 0 missing `data-call-cta`
+- Hero still carries 0 call buttons; plan CTAs unchanged (4 × "Call to order",
+  1 × "Call for pricing")
+- Animation census: 1 Ken Burns, 12 aurora blobs, 1 marquee, 2 line reveals,
+  5 fade-rises
+- Forbidden-phrase scan clean; no year stamp; section order unchanged
+
+---
+
+## [0.6.0] — Bundle overlay fixed, eight compliance pages added
+
+### 1. Bundle section overlay — this was a real bug
+
+Two scrims were stacked on the bundle background: a flat `bg-navy-90/86` and a
+vertical `from-navy-90 via-navy-90/70 to-navy-90`. They compound:
+
+```
+mid    0.86 + (1-0.86) x 0.70 = 0.958
+top/bot 0.86 + (1-0.86) x 1.00 = 1.000   <- fully opaque
+```
+
+The photograph was almost entirely hidden. Replaced with a single top-weighted
+treatment, `bg-navy-90/45` plus `from-navy-90/72 via-transparent to-navy-90/45`:
+
+| Band | Composite | Effect |
+| --- | --- | --- |
+| Top (heading) | 0.846 | white heading 5.09:1, navy-10 subheading 4.77:1 — both pass |
+| Middle (card + surrounds) | 0.450 | photo retains 55% of its strength |
+| Bottom | 0.698 | grounds the section edge |
+
+Measured against this specific image, whose windows blow out to pure white
+(luminance 1.000) — that worst-case pixel is what sets the top-band figure. The
+dark-tone subheading was lifted from `navy-20` to `navy-10` to clear 4.5:1.
+
+### 2. Eight compliance pages
+
+Clarified scope: the request was for policy pages, not additional service
+sections. Built as data in `lib/legal.ts` → rendered by `components/LegalPage.tsx`
+→ routed through a single `app/[slug]/page.tsx`.
+
+| Route | Covers |
+| --- | --- |
+| `/privacy-and-data-protection` | Collection, use, sharing, rights, retention, security, children |
+| `/disclaimer` | Retailer status, pricing/availability limits, speed caveats, liability |
+| `/cookies-policy` | Categories, third parties, browser control, GPC handling |
+| `/tcpa-policy` | Consent, revocation, internal DNC, calling hours, call recording |
+| `/trademarks` | Provider mark ownership, nominative use, no implied affiliation |
+| `/marketing-policy` | Claim accuracy, material terms, comparisons, channels, partners |
+| `/service-fulfillment` | Order flow, who does what, installation, equipment, billing |
+| `/pci-dss` | No card data on this site, telephone order handling, scope |
+
+`generateStaticParams` builds all eight at compile time; `dynamicParams = false`
+means any other path 404s rather than rendering an empty document. Adding a
+document to `LEGAL_DOCS` creates its route, metadata and footer link — the route
+file needs no edit.
+
+Page layout: dark masthead with the aurora field, a sticky numbered table of
+contents, numbered sections with a readable 72ch measure, and a closing block
+with the retailer disclosure and a call CTA.
+
+### 3. Multi-page plumbing
+- `Footer` moved from `app/page.tsx` into `app/layout.tsx` so it renders on every
+  route.
+- All in-page anchors changed from `#plans` to `/#plans` so they resolve from a
+  policy page. The wordmark now links to `/` rather than `#top`.
+- **`SmoothScroll` click handler rewritten.** It previously grabbed every
+  `a[href^="#"]`; with absolute anchors it would either miss them or hijack
+  cross-page navigation. It now resolves the URL and only intercepts when the
+  pathname matches the current page, ignoring modified clicks, non-left clicks
+  and `target` links. Cross-page links fall through to Next's router.
+- Skip link retargeted from `#top` (home only) to `#main-content`, added to both
+  `main` elements.
+- Header and footer internal links converted to `next/link` for client-side
+  navigation.
+- `metadataBase` set from `NEXT_PUBLIC_SITE_URL` so per-page canonicals resolve.
+- Footer legal row rewired from four `#legal` placeholders to the eight real pages.
+
+### 4. US spelling
+Ten British spellings had crept into the new policy copy (honour, enquiry,
+dialling, cancelled, licence). Swept `lib/` and `components/`; none remain.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   11 routes, 8 policy pages prerendered as static HTML
+```
+- All eight routes return **200** with correct per-page titles
+- `/not-a-real-page` returns **404**
+- 320px on a policy page — `scrollWidth` 320, **0 genuinely overflowing elements**
+- Table of contents renders, footer carries 17 internal links
+
+### ⚠ Before these pages go live
+1. **Fill in `COMPANY` in `lib/content.ts`.** `legalName`, `addressLines`,
+   `privacyEmail`, `legalEmail` and `websiteDomain` are bracketed placeholders
+   and render **literally on the pages**.
+2. **Have counsel review the text.** These are drafted to industry-standard
+   retailer practice, not legal advice. The PCI DSS page in particular states a
+   scope position — confirm it matches your actual order-taking process and any
+   attestation you hold.
+3. **Set `effectiveDate`** on each doc if you want dates shown; the field exists
+   and renders only when populated.
+4. Set `NEXT_PUBLIC_SITE_URL` in the deploy environment.
+
+---
+
+## [0.7.0] — Headline contrast bug, hero motion, more vibrant section fields
+
+### 1. "The heading is not highlighted" was a contrast failure, not a taste call
+
+Measured the accent line's colour against the actual pixels behind it. The blue
+half of the headline was genuinely washing out:
+
+| Accent colour | Worst case @ 59% across | Large-text floor 3:1 |
+| --- | --- | --- |
+| `brand-40 #84aeff` (was in use) | **2.45:1** | **FAIL** |
+| `aqua #36cec9` | 2.80:1 | FAIL |
+| `coral-50 #ffb090` | 3.07:1 | PASS |
+| `brand-30 #cfddff` | 4.00:1 | PASS |
+| `white #ffffff` | 5.44:1 | PASS |
+
+The scrim falls to nothing by 86% of the width (to keep the house visible), and
+the lit windows sit right under the end of the accent line. `#84aeff` simply is
+not bright enough to survive that.
+
+Replaced with a gradient fill, every stop of which clears the floor — `#b9d1ff`
+(3.52:1) → `#ffffff` (5.43:1) → `#cfddff` (3.99:1) — animated with
+`gradient-pan`, so light travels through the line rather than it sitting flat.
+Because the gradient pans, *all* stops have to pass, not just the one that
+happens to sit at the worst point.
+
+### 2. Headline bloom
+A blue radial glow now sits behind the headline on its own slow pulse. It reads
+as a highlight and restores the brand colour that moved out of the text.
+
+It also *improves* legibility rather than eroding it: Ting blue has a relative
+luminance of 0.14, well below the 0.68 of the lit windows it overlaps, so
+compositing it in darkens the worst area of the frame.
+
+### 3. More hero motion
+- `gradient-pan` — 9s, light travelling through the accent line.
+- `glow-pulse` — 10s, the bloom breathing behind the headline.
+- `sheen` — 7s, one pass of light across the price lockup with a long rest
+  between passes.
+- `float-soft` — 7.5s, the circular badge drifting ±10px.
+
+The badge now nests three elements: positioning (`-translate-y-1/2`), float, and
+entrance. All three write to `transform`, so they cannot share an element — the
+same class of bug that dropped the badge in 0.5.0.
+
+### 4. Section fields made more vibrant
+`Aurora` gained a third blob in Ting's tertiary aqua (`#36cec9`) on a 29s period,
+and every blob was pushed up:
+
+| | Blue | Coral | Aqua |
+| --- | --- | --- | --- |
+| Light sections | 12% → **20%** | 12% → **18%** | — → **14%** |
+| Dark sections | 30% → **40%** | 22% → **30%** | — → **22%** |
+
+Three periods (26s / 32s / 29s) share no common multiple inside a session, so
+the composite never visibly repeats. Still under body copy, so the ceiling is set
+by the text contrast budget rather than by taste.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   11 routes, clean
+```
+- Accent gradient stops: 3.52 / 5.43 / 3.99:1 — all clear the 3:1 large-text floor
+- 320px — `scrollWidth` 320, **0 genuinely overflowing elements** (the glow uses
+  negative insets but is clipped by the hero's `overflow-hidden`)
+- 31 animated elements; all registered in the `prefers-reduced-motion` kill list,
+  which switches them off outright rather than compressing them
+- DOM check confirms `background-clip: text` resolving and `gradient-pan`,
+  `glow-pulse`, `sheen`, `float-soft` all bound
+
+---
+
+## [0.8.0] — Hero entrance choreography
+
+Everything added through 0.7.0 was ambient drift — slow enough to be felt rather
+than seen. What was missing was an entrance with a shape to it, and something
+that responds to the visitor. Five additions.
+
+### 1. Word-by-word headline reveal
+`components/RevealWords.tsx` splits a line into words and staggers them 70ms
+apart, each resolving **out of a blur** as it rises (`word-rise`: opacity 0→1,
+translateY 0.5em→0, blur 7px→0). Reads as type settling into focus rather than a
+generic fade. Six words across two lines, 120ms → 470ms.
+
+**Why the gradient is applied per word, not per line:** `background-clip: text`
+clips a background to the glyphs in that element's own paint layer. A descendant
+carrying `transform` or `filter` is rasterised separately and drops the fill, so
+nesting animated words inside a gradient-filled line renders them invisible.
+Keeping clip, transform and blur on the same element sidesteps it — and the
+words end up catching the light in sync, which reads as deliberate.
+
+`animation` cannot be declared twice on one element, so the reveal and the
+shimmer are composed into a single `--animate-word-shimmer` token.
+
+### 2. Price counts up
+`$89` counts from zero on mount with an easeOutExpo curve, 1.1s after a 620ms
+delay — it lands just as the chips arrive. Draws the eye to the conversion
+anchor.
+
+**This one needed hardening, because it renders a price.** First implementation
+was measured showing **`0`**: browsers suspend `requestAnimationFrame` in a
+background tab, so the counter reset to zero and never advanced. A visitor
+opening the page in a background tab would have seen **$0**. Three guards now:
+
+- SSR renders the real value, so static HTML, no-JS and crawlers get `89`.
+- The reset to zero happens in a layout effect, before paint — no flash.
+- Animation is skipped entirely under reduced motion **or when
+  `document.visibilityState !== 'visible'`**, and a watchdog timer forces the
+  final value if the frame loop stalls for any other reason.
+
+Re-verified with the tab hidden: lands on `89`.
+
+### 3. Cursor spotlight
+`components/Spotlight.tsx` — a soft light tracking the pointer across the hero.
+Writes position to CSS custom properties inside one rAF and lets a
+radial-gradient read them, so there is no React state and no re-render per move.
+Inert on coarse pointers and under reduced motion; starts transparent and fades
+in on first movement so it never appears parked in a corner.
+
+### 4. Border beam on the availability pill
+The pill sits inside a 1.5px shell with a conic gradient rotating behind it,
+showing through that gap as light running around the border. 5.5s. Draws the eye
+to the primary interaction without a colour change or a pulse.
+
+### 5. Spec chips stagger in
+`chip-in` on a slight overshoot curve, 90ms apart, timed to land with the price.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   11 routes, clean
+```
+- 6 headline words staggered 0.12s → 0.47s; 3 gradient words resolving
+  `word-rise, gradient-pan`; `background-clip: text` confirmed applying
+- Price lands on `89` with the tab hidden (the regression case)
+- Chips at 0.90 / 0.99 / 1.08s; beam and spotlight both bound
+- **38 animated elements**, all in the `prefers-reduced-motion` kill list, which
+  now also clears `filter` since `word-rise` animates blur
+- 320px — `scrollWidth` 320, **0 genuinely overflowing elements**; the ZIP pill
+  gained a wrapper and still fits at 285px with 156px of input
+
+---
+
+## [0.9.0] — Four highlight treatments
+
+### 1. Headline
+Two layers rather than one. A glyph-hugging `drop-shadow` pair on the `h1` —
+a tight dark shadow for separation from the photograph, plus a wide Ting-blue
+bloom — and a **marker rule** that wipes out from the left beneath the headline
+and then holds the same travelling light as the accent words
+(`rule-grow` + `gradient-pan` composed into `--animate-rule-sweep`). The rule
+runs blue → coral, which puts the brand colours back on the headline without
+putting a low-contrast blue into the type itself.
+
+### 2. Hero background
+The hero had no colour field of its own — only the photograph and the scrim.
+Added three drifting blobs (blue / aqua / coral) on the existing aurora periods,
+**pinned to the left 62% on `lg` and up**.
+
+That constraint is the whole point: the scrim is near-solid over the copy column,
+so the blobs read as motion behind the text and never spill onto the house. A
+full-width field here would have reproduced exactly the ghosting that the 0.5.0
+scrim rework removed.
+
+### 3. "Standard install / Included" badge
+Three additions: a halo breathing outward from the disc (`halo`, 6s), a light
+running around the rim (the same conic-gradient device as the availability pill),
+and a gradient fill with travelling light on the word "Included".
+
+Gradient stops are `#243edb` → `#3253ff` → `#0f1e93` on white, measuring
+7.5:1 / 5.5:1 / higher — all clear AA for normal text, never mind the 1.7rem
+bold this renders at.
+
+### 4. `$89`
+A blue bloom behind the figure, on the same slow pulse as the headline.
+
+Worth noting why this does not cost legibility: Ting blue sits at relative
+luminance 0.14, well below anything in the photograph behind it, so compositing
+it in **deepens** the backdrop. The white numerals gain contrast rather than
+losing it — the same reasoning as the headline bloom in 0.7.0.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   11 routes, clean
+```
+- Marker rule resolving `rule-grow, gradient-pan`, 320px wide at 1440
+- Headline carrying both drop-shadows; 2 blooms; 3 hero aurora blobs
+- Badge halo bound, rim beam present (2 beams on the page: pill + badge),
+  `background-clip: text` applying to the badge value
+- **46 animated elements**, all in the `prefers-reduced-motion` kill list
+- 320px — `scrollWidth` 320, **0 genuinely overflowing elements**; price still
+  lands on `89`
+
+---
+
+## [1.0.0] — Mobile hardening, repo, Vercel readiness
+
+### Mobile audit at 390px — three real findings
+
+**1. Tap targets.** 19 links measured under 40px, all in the footer at **18px**
+tall. First fix used `py-2 -my-2` (padding for the hit area, negative margin to
+preserve the 9px rhythm from the reference footer) and got them to 36px — still
+short, and worse, the 12px negative pull against a 9px gap meant **neighbouring
+hit areas overlapped by 15px**, so a tap near an edge would fire the wrong link.
+
+Replaced with real padding and no gap on phones, reverting to the reference
+rhythm from `sm` up: `py-[11px] sm:py-0` with `gap-0 sm:gap-[9px]`. Now 40px,
+**0 overlapping pairs**. Same treatment for the legal row and the policy-page
+table of contents, where the index number needed matching padding to stay
+aligned with its link.
+
+One 21px target remains by design: the inline phone link inside the footer's
+closing sentence. WCAG 2.5.8 exempts targets within a block of text, and padding
+it would break the line box.
+
+**2. Blur cost.** 18 elements carrying 110–130px blur, totalling **4.95 Mpx** of
+heavily-blurred surface on a 390px viewport — expensive compositing on a phone
+GPU. Blobs now shrink to ~55px blur at phone sizes and the third (decorative
+only) is dropped below `sm`. Chip backdrops drop to `backdrop-blur-sm`.
+Measured after: **1.5 Mpx**, a 70% reduction.
+
+**3. Per-frame filter work.** `word-rise` animates `filter: blur()` on every
+headline word, and Ken Burns travels a full-bleed image. Both are redefined
+inside `@media (max-width: 639px)` — the words rise without the blur pass, and
+the Ken Burns scale delta drops from 0.10 to 0.05. Redefining a keyframe inside
+a media query overrides it for that range, so this needs no extra classes.
+
+### Vercel readiness
+- `app/sitemap.ts` and `app/robots.ts`, both generated from `LEGAL_DOCS` so a new
+  policy page is indexed automatically. Build now emits `/sitemap.xml` and
+  `/robots.txt`.
+- `.env.example` documenting `NEXT_PUBLIC_SITE_URL`, which drives `metadataBase`,
+  canonicals, the sitemap and robots. Falls back to localhost so a missing
+  variable never fails the build.
+- `.gitignore` extended to cover `.env` files.
+- README rewritten with the deployment procedure and a pre-launch checklist.
+
+### Verification
+```
+npm run lint    0 errors, 0 warnings
+npm run build   13 routes: /, 8 policy pages, /sitemap.xml, /robots.txt, /_not-found
+```
+- 390px — 0 overflowing elements, 1 exempt tap target, 0 overlapping footer links
+- 320px — 0 overflowing elements (carried forward)
+- Heavily-blurred surface at 390px: 4.95 Mpx → **1.5 Mpx**
